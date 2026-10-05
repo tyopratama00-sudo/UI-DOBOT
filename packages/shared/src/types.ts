@@ -166,6 +166,7 @@ export const sessionCommandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('prerender') }),
   z.object({ type: z.literal('confirm') }),
   z.object({ type: z.literal('auto_complete') }),
+  z.object({ type: z.literal('skip_session') }),
   z.object({ type: z.literal('finish') }),
   z.object({ type: z.literal('cancel') }),
   z.object({ type: z.literal('retry_payment') }),
