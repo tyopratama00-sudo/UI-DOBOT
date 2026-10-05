@@ -504,6 +504,11 @@ export function toFrames() {
   robot.rbNav('Lanjut pilih frame!', 'point', () => void guard('frames', () => send({ type: 'choose_frame' })));
 }
 
+/** prototype skipSession(): skip photo capture → auto_complete → frame selection */
+export function skipSession() {
+  robot.rbNav('Skip foto!', 'hop', () => void guard('skip', () => send({ type: 'auto_complete' })));
+}
+
 export function back() {
   void guard('back', async () => {
     if (get().session?.status === 'EDITING') await flushEdits();
@@ -664,6 +669,7 @@ export function resetToWelcome() {
     notice: null,
     clientError: null,
     idle: null,
+    voucherDiscount: 0,
     readyCd: get().config?.session.readySeconds ?? 5,
   });
   void refreshHealth();
