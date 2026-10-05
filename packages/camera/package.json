@@ -1,0 +1,24 @@
+{
+  "name": "@photobooth/camera",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./browser": "./src/browser/index.ts",
+    "./node": "./src/node/index.ts"
+  },
+  "dependencies": {
+    "@photobooth/ui": "*"
+  },
+  "peerDependencies": {
+    "sharp": ">=0.33"
+  },
+  "peerDependenciesMeta": {
+    "sharp": {
+      "optional": true
+    }
+  }
+}

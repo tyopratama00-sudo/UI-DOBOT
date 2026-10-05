@@ -1,0 +1,15 @@
+{
+  "$comment": "Physical robot positions for angles 1..N. 'position' is forwarded verbatim to the robot controller (units are defined by your robot firmware). Editable from Admin → Configuration → Angles.",
+  "angles": [
+    { "id": 1, "name": "Front", "position": { "pan": 0, "tilt": 0, "height": 140, "distance": 160 } },
+    { "id": 2, "name": "Front Left", "position": { "pan": -30, "tilt": 0, "height": 140, "distance": 160 } },
+    { "id": 3, "name": "Left", "position": { "pan": -60, "tilt": 5, "height": 150, "distance": 170 } },
+    { "id": 4, "name": "High Front", "position": { "pan": 0, "tilt": -20, "height": 190, "distance": 170 } },
+    { "id": 5, "name": "Low Front", "position": { "pan": 0, "tilt": 15, "height": 100, "distance": 160 } },
+    { "id": 6, "name": "Right", "position": { "pan": 60, "tilt": 5, "height": 150, "distance": 170 } },
+    { "id": 7, "name": "Front Right", "position": { "pan": 30, "tilt": 0, "height": 140, "distance": 160 } },
+    { "id": 8, "name": "Close Up", "position": { "pan": 0, "tilt": 0, "height": 145, "distance": 110 }, "settleMs": 400 },
+    { "id": 9, "name": "Wide", "position": { "pan": 0, "tilt": 0, "height": 150, "distance": 230 } },
+    { "id": 10, "name": "Top Down", "position": { "pan": 0, "tilt": -35, "height": 210, "distance": 150 }, "settleMs": 500 }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "name": "robot-photobooth",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Robot Photobooth – production kiosk application (booth UI, admin panel, server, hardware adapters)",
+  "workspaces": [
+    "packages/*",
+    "apps/booth",
+    "apps/admin",
+    "apps/server"
+  ],
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:server": "npm run dev -w @photobooth/server",
+    "dev:booth": "npm run dev -w @photobooth/booth",
+    "dev:admin": "npm run dev -w @photobooth/admin",
+    "build": "npm run db:generate && npm run build -w @photobooth/booth && npm run build -w @photobooth/admin && npm run build -w @photobooth/server",
+    "start": "npm run db:deploy && npm run start -w @photobooth/server",
+    "db:generate": "npm run generate -w @photobooth/database",
+    "db:migrate": "npm run migrate:dev -w @photobooth/database",
+    "db:deploy": "npm run migrate:deploy -w @photobooth/database",
+    "db:seed": "npm run seed -w @photobooth/database",
+    "db:reset": "npm run migrate:reset -w @photobooth/database",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "test:e2e": "playwright test",
+    "kiosk:install": "npm install --prefix apps/kiosk",
+    "kiosk": "npm start --prefix apps/kiosk",
+    "postinstall": "npm run db:generate"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "@types/node": "^22.7.0",
+    "dotenv": "^16.4.5",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4"
+  }
+}

@@ -1,0 +1,299 @@
+// Robot Photobooth – PostgreSQL schema (Prisma ORM)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Mirrors packages/shared/src/fsm.ts SESSION_STATES
+enum SessionStatus {
+  IDLE
+  SELECT_PRINT
+  WAITING_PAYMENT
+  PAYMENT_SUCCESS
+  PAYMENT_FAILED
+  READY
+  ROBOT_MOVING
+  POSE_GUIDANCE
+  COUNTDOWN
+  CAPTURING
+  CAPTURE_SUCCESS
+  ANGLE_COMPLETE
+  SESSION_COMPLETE
+  REVIEW
+  RETAKE
+  FRAME_SELECTION
+  PHOTO_SELECTION
+  EDITING
+  FINAL_PREVIEW
+  RENDERING
+  PRINTING
+  PRINT_SUCCESS
+  PRINT_FAILED
+  GENERATING_GALLERY
+  QR_READY
+  FINISHED
+  RESETTING
+  ERROR
+  CANCELLED
+  EXPIRED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  EXPIRED
+  CANCELLED
+  REFUNDED
+}
+
+enum PrintJobStatus {
+  QUEUED
+  RENDERING
+  PRINTING
+  COMPLETED
+  FAILED
+  RETRYING
+  CANCELLED
+}
+
+enum UploadStatus {
+  PENDING
+  UPLOADING
+  DONE
+  FAILED
+}
+
+enum LogLevel {
+  DEBUG
+  INFO
+  WARN
+  ERROR
+}
+
+model Session {
+  id               String        @id @default(cuid())
+  sessionCode      String        @unique
+  status           SessionStatus @default(SELECT_PRINT)
+  /// sha256 of the per-session secret handed to the booth
+  tokenHash        String
+  deviceId         String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  paidAt           DateTime?
+  startedAt        DateTime?
+  finishedAt       DateTime?
+  expiresAt        DateTime?
+  lastActivityAt   DateTime      @default(now())
+  printQuantity    Int           @default(1)
+  amount           Int           @default(0)
+  currency         String        @default("IDR")
+  selectedTemplate String?
+  /// Frozen copy of angles/shots/retake limit at creation time
+  plan             Json
+  captureAngle     Int?
+  captureShot      Int?
+  retakeAngle      Int?
+  retakenAngles    Int[]         @default([])
+  captureFailures  Int           @default(0)
+  compositePath    String?
+  printFilePath    String?
+  renderHash       String?
+  galleryToken     String?       @unique
+  galleryCreatedAt DateTime?
+  galleryExpiresAt DateTime?
+  errorCode        String?
+  errorMessage     String?
+  /// Optimistic concurrency + idempotency
+  version          Int           @default(0)
+  lastCommandId    String?
+  lastCommandResult Json?
+  autoCompleted    Boolean       @default(false)
+
+  payments  Payment[]
+  photos    Photo[]
+  edits     Edit[]
+  printJobs PrintJob[]
+  events    SessionEvent[]
+  uploads   UploadJob[]
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Payment {
+  id                    String        @id @default(cuid())
+  sessionId             String
+  session               Session       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  provider              String
+  providerTransactionId String
+  /// Our merchant order id sent to the gateway
+  orderId               String        @unique
+  amount                Int
+  quantity              Int
+  status                PaymentStatus @default(PENDING)
+  qrPayload             String
+  expiresAt             DateTime
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  paidAt                DateTime?
+  rawPayload            Json?
+
+  @@unique([provider, providerTransactionId])
+  @@index([sessionId])
+  @@index([status])
+}
+
+model WebhookEvent {
+  id             String   @id @default(cuid())
+  provider       String
+  orderId        String?
+  signatureValid Boolean
+  processed      Boolean  @default(false)
+  payload        Json
+  error          String?
+  createdAt      DateTime @default(now())
+
+  @@index([orderId])
+}
+
+model Photo {
+  id            String   @id @default(cuid())
+  sessionId     String
+  session       Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  angle         Int
+  shotNumber    Int
+  originalPath  String
+  processedPath String?
+  previewPath   String?
+  thumbnailPath String?
+  width         Int?
+  height        Int?
+  bytes         Int?
+  source        String   @default("unknown")
+  /// In the session's active set (prototype S.sel)
+  selected      Boolean  @default(true)
+  /// Captured during a retake
+  retaken       Boolean  @default(false)
+  /// Replaced by a retake photo (kept, never deleted)
+  superseded    Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  edits Edit[]
+
+  @@unique([sessionId, angle, shotNumber])
+  @@index([sessionId])
+}
+
+model Edit {
+  id             String   @id @default(cuid())
+  sessionId      String
+  session        Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  slotIndex      Int
+  photoId        String
+  photo          Photo    @relation(fields: [photoId], references: [id], onDelete: Cascade)
+  /// translate as a fraction of slot width / height
+  x              Float    @default(0)
+  y              Float    @default(0)
+  zoom           Float    @default(1)
+  rotation       Float    @default(0)
+  flipHorizontal Boolean  @default(false)
+  brightness     Float    @default(1)
+  filter         String   @default("original")
+  /// Visible window in normalized coordinates {x,y,w,h}
+  crop           Json?
+  updatedAt      DateTime @updatedAt
+
+  @@unique([sessionId, slotIndex])
+}
+
+model PrintJob {
+  id            String         @id @default(cuid())
+  sessionId     String
+  session       Session        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  printer       String
+  copies        Int
+  status        PrintJobStatus @default(QUEUED)
+  filePath      String?
+  attempts      Int            @default(0)
+  maxAttempts   Int            @default(3)
+  nextAttemptAt DateTime       @default(now())
+  progress      Int            @default(0)
+  providerJobId String?
+  isReprint     Boolean        @default(false)
+  requestedBy   String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  error         String?
+  errorCode     String?
+
+  @@index([status, nextAttemptAt])
+  @@index([sessionId])
+}
+
+model UploadJob {
+  id            String       @id @default(cuid())
+  sessionId     String?
+  session       Session?     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  key           String
+  localPath     String
+  contentType   String
+  status        UploadStatus @default(PENDING)
+  attempts      Int          @default(0)
+  nextAttemptAt DateTime     @default(now())
+  error         String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@unique([key])
+  @@index([status, nextAttemptAt])
+}
+
+model SessionEvent {
+  id         String   @id @default(cuid())
+  sessionId  String
+  session    Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  event      String
+  fromStatus String?
+  toStatus   String?
+  data       Json?
+  createdAt  DateTime @default(now())
+
+  @@index([sessionId, createdAt])
+}
+
+model DeviceEvent {
+  id        String   @id @default(cuid())
+  device    String
+  level     LogLevel @default(INFO)
+  event     String
+  message   String
+  sessionId String?
+  data      Json?
+  createdAt DateTime @default(now())
+
+  @@index([device, createdAt])
+  @@index([createdAt])
+}
+
+model AppSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+}
+
+model AdminUser {
+  id           String    @id @default(cuid())
+  username     String    @unique
+  passwordHash String
+  createdAt    DateTime  @default(now())
+  lastLoginAt  DateTime?
+}

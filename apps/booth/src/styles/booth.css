@@ -1,0 +1,192 @@
+/*
+ * Production-only additions on top of the verbatim prototype stylesheet
+ * (packages/ui/src/prototype.css). These cover things the prototype simulated:
+ * real <img>/<video> elements, loading states, overlays and kiosk details.
+ * They reuse the prototype tokens; nothing here restyles prototype elements.
+ */
+html,
+body {
+  touch-action: manipulation;
+  overscroll-behavior: none;
+  -webkit-user-drag: none;
+}
+#root {
+  height: 100%;
+}
+img {
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+/* Photos are real images now (prototype drew SVG placeholders inside .ph) */
+.ph > img.pic {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+.ph.empty {
+  background: linear-gradient(180deg, #e9eef3, #dfe6ec);
+}
+
+/* Real camera live view inside the prototype .cam container */
+.cam .lv {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: #1b1a33;
+}
+.cam .lv.cover {
+  object-fit: cover;
+}
+.cam .lv.contain {
+  object-fit: contain;
+}
+.cam .vf,
+.cam .live,
+.cam .cd,
+.cam .fl,
+.cam .stat {
+  z-index: 2;
+}
+.cam .live.off {
+  background: var(--mu);
+}
+
+/* QR loading / refreshing */
+.qrbox {
+  transition: opacity 0.25s;
+}
+.qrbox.busy {
+  opacity: 0.35;
+}
+.qrskel {
+  width: 360px;
+  height: 360px;
+  border-radius: 12px;
+  background: repeating-linear-gradient(45deg, #eef2f6 0 18px, #f6f8fa 18px 36px);
+  animation: qrp 1.2s ease-in-out infinite;
+}
+@keyframes qrp {
+  50% {
+    opacity: 0.55;
+  }
+}
+.pill .tm {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+  margin-left: 4px;
+}
+
+/* Overlays (idle warning, reconnecting) */
+.ovl {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  background: rgba(43, 42, 76, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: in 0.3s ease;
+}
+.ovl .card {
+  width: 980px;
+  padding: 56px 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 26px;
+  text-align: center;
+}
+.ovl .count {
+  font-size: 150px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--bl);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Lightbox photo */
+.lbx {
+  position: absolute;
+  inset: 0;
+  background: rgba(43, 42, 76, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9;
+}
+.lbx .big {
+  width: 1200px;
+  height: 900px;
+  border-radius: 40px;
+  overflow: hidden;
+  border: 10px solid #fff;
+  position: relative;
+}
+
+/* Busy state for buttons waiting for the server */
+.btn.wait {
+  opacity: 0.7;
+  pointer-events: none;
+}
+.btn.wait::after {
+  content: '';
+  width: 0.7em;
+  height: 0.7em;
+  border-radius: 50%;
+  border: 0.14em solid currentColor;
+  border-right-color: transparent;
+  animation: spn 0.8s linear infinite;
+  margin-left: 6px;
+}
+@keyframes spn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Touch: pressed feedback must not depend on hover */
+.th:active,
+.card[data-tap]:active {
+  transform: scale(0.98);
+}
+.th,
+.card[data-tap] {
+  transition: transform 0.12s;
+}
+
+/* Development toolbar (only with ?dev in non-production builds) */
+#dm {
+  position: fixed;
+  left: 8px;
+  bottom: 8px;
+  z-index: 30;
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  max-width: 96vw;
+  background: rgba(43, 42, 76, 0.85);
+  padding: 6px;
+  border-radius: 12px;
+  font: 12px sans-serif;
+  color: #fff;
+  align-items: center;
+}
+#dm button {
+  font: 12px sans-serif;
+  border: 0;
+  border-radius: 8px;
+  padding: 5px 9px;
+  background: #fff;
+  color: var(--ink);
+  cursor: pointer;
+}
+#dm button.on {
+  background: var(--ye);
+}
