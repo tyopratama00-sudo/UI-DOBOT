@@ -393,9 +393,10 @@ async function runSession(retakeAngle: number | null) {
     }
     await runCapture(t, retakeAngle);
   } catch (e) {
-    if (isAbort(e)) { captureRunning = false; return; }
-    set({ notice: (e as ApiError).userMessage ?? 'Terjadi kendala.' });
-    await resync();
+    if (!isAbort(e)) {
+      set({ notice: (e as ApiError).userMessage ?? 'Terjadi kendala.' });
+      await resync();
+    }
   } finally {
     captureRunning = false;
   }
@@ -501,11 +502,6 @@ export function retake(angle: number) {
 
 export function toFrames() {
   robot.rbNav('Lanjut pilih frame!', 'point', () => void guard('frames', () => send({ type: 'choose_frame' })));
-}
-
-/** prototype skipSession(): skip photo capture → server generates placeholders + fast-forward to rendering */
-export function skipSession() {
-  robot.rbNav('Skip foto!', 'hop', () => void guard('skip', () => send({ type: 'skip_session' })));
 }
 
 export function back() {
@@ -668,7 +664,6 @@ export function resetToWelcome() {
     notice: null,
     clientError: null,
     idle: null,
-    voucherDiscount: 0,
     readyCd: get().config?.session.readySeconds ?? 5,
   });
   void refreshHealth();

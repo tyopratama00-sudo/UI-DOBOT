@@ -1,7 +1,7 @@
 import { p2, retakesLeft } from '@photobooth/shared';
 import { flatPhotos, useBooth } from '../store';
 import { Icon, Pic } from '../components/basics';
-import { closeLightbox, retake, skipSession, tapReviewPhoto, toFrames } from '../flow';
+import { closeLightbox, retake, tapReviewPhoto, toFrames } from '../flow';
 
 /** prototype V.review */
 export function Review() {
@@ -21,14 +21,7 @@ export function Review() {
             Ketuk foto untuk memperbesar. Sudut yang diulang: pilih {shotsPerAngle} dari {shotsPerAngle * 2}.
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <div className={`chip ${left ? 'y' : ''}`}>{left ? `${left} ULANG TERSISA` : 'ULANG HABIS'}</div>
-          {left ? (
-            <button className="btn sm" style={{ background: 'var(--er)', color: '#fff' }} onClick={skipSession}>
-              <Icon n="x" z={26} /> SELESAI
-            </button>
-          ) : null}
-        </div>
+        <div className={`chip ${left ? 'y' : ''}`}>{left ? `${left} ULANG TERSISA` : 'ULANG HABIS'}</div>
       </div>
       <div className="g5" style={{ flex: 1, gridTemplateColumns: `repeat(${cols},1fr)`, gridTemplateRows: `repeat(${rows},1fr)`, minHeight: 0 }}>
         {[...Array(angles)].map((_, a) => {

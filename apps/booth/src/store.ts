@@ -51,8 +51,6 @@ export interface BoothState {
   notice: string | null;
   clientError: { code: string; message: string } | null;
   idle: { secondsLeft: number; total: number; kind: 'unpaid' | 'paid' | 'done' } | null;
-  /** voucher discount amount in rupiah (0 = no discount) */
-  voucherDiscount: number;
 }
 
 export const useBooth = create<BoothState>(() => ({
@@ -80,7 +78,6 @@ export const useBooth = create<BoothState>(() => ({
   notice: null,
   clientError: null,
   idle: null,
-  voucherDiscount: 0,
 }));
 
 export const set = useBooth.setState;

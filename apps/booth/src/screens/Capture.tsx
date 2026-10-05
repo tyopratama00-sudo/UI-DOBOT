@@ -2,7 +2,6 @@ import { nextMissingStep, p2, POSE_NAMES, tipFor } from '@photobooth/shared';
 import { useBooth } from '../store';
 import { Cam, } from '../components/Cam';
 import { Icon } from '../components/basics';
-import { skipSession } from '../flow';
 
 /** prototype V.ready */
 export function Ready() {
@@ -15,9 +14,6 @@ export function Ready() {
   return (
     <div className="scr en">
       <div className="top">
-        <button className="btn sm" style={{ background: 'var(--er)', color: '#fff' }} onClick={skipSession}>
-          <Icon n="x" z={26} /> SELESAI
-        </button>
         <div className="chip b">Sudut {p2(angle + 1)} segera dimulai</div>
         <div className="chip y" data-testid="ready-cd">
           Mulai dalam {cd} detik
@@ -63,9 +59,6 @@ export function Session() {
   return (
     <div className="scr en">
       <div className="top">
-        <button className="btn sm" style={{ background: 'var(--er)', color: '#fff' }} onClick={skipSession}>
-          <Icon n="x" z={26} /> SELESAI
-        </button>
         <div className="chip b" data-testid="session-angle">
           {retake ? 'ULANG · ' : ''}SUDUT {p2(a + 1)} / {p2(angles)}
         </div>

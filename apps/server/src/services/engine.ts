@@ -499,11 +499,6 @@ export class SessionEngine {
         return () => void this.runOutputPipeline(s.id);
       }
 
-      case 'skip_session': {
-        await this.skipSessionLocked(s);
-        return () => void this.runOutputPipeline(s.id);
-      }
-
       case 'finish': {
         this.requireState(s, ['QR_READY']);
         await this.move(s, 'FINISH', { finishedAt: new Date() });
@@ -620,59 +615,6 @@ export class SessionEngine {
     if (failures > max) {
       await this.move(s, 'FAIL', { errorCode: 'CAMERA_CAPTURE_FAILED', errorMessage: err.message.slice(0, 500) }, { reason: 'capture_retries_exhausted' });
     }
-  }
-
-  // ------------------------------------------------------------------ skip session (testing)
-  // Generates placeholder photos so the session can proceed to rendering without real captures.
-  async skipSessionLocked(s0: FullSession) {
-    const s = await this.load(s0.id);
-    const state = s.status as SessionState;
-    if (!['READY', 'ROBOT_MOVING', 'POSE_GUIDANCE', 'COUNTDOWN', 'CAPTURING', 'CAPTURE_SUCCESS', 'ANGLE_COMPLETE', 'SESSION_COMPLETE', 'REVIEW', 'RETAKE'].includes(state)) {
-      throw new AppError('INVALID_TRANSITION', 409, `Cannot skip session from ${state}`, USER_MESSAGES.INVALID_TRANSITION);
-    }
-    const plan = planOf(s);
-    const hasPhotos = s.photos.length > 0;
-    if (!hasPhotos) {
-      // Generate placeholder photos for each angle
-      const placeholderBuf = Buffer.alloc(1024, 0);
-      for (let a = 0; a < plan.angles; a++) {
-        for (let sh = 0; sh < plan.shotsPerAngle; sh++) {
-          const key = `sessions/${s.id}/original/a${String(a + 1).padStart(2, '0')}_s${String(sh + 1).padStart(2, '0')}.jpg`;
-          try {
-            await this.d.store.put(key, placeholderBuf);
-            const photo = await this.d.prisma.photo.create({
-              data: {
-                sessionId: s.id,
-                angle: a,
-                shotNumber: sh,
-                selected: sh === 0,
-                superseded: sh > 0,
-                retaken: false,
-                originalPath: key,
-                processedPath: key,
-                previewPath: key,
-                thumbnailPath: key,
-                width: 1920,
-                height: 1080,
-              },
-            });
-            if (sh === 0) {
-              await this.d.prisma.edit.create({
-                data: { sessionId: s.id, photoId: photo.id, slotIndex: a, x: 0, y: 0, zoom: 1, rotation: 0, flipHorizontal: false, brightness: 1, filter: 'original', crop: { x: 0, y: 0, w: 100, h: 100 } },
-              });
-            }
-          } catch {
-            /* skip on error */
-          }
-        }
-      }
-    }
-    // Fast-forward to REVIEW → auto-complete → rendering
-    if (!['REVIEW', 'SESSION_COMPLETE'].includes(s.status as SessionState)) {
-      await this.move(s, 'ALL_ANGLES_DONE');
-      await this.move(await this.load(s.id), 'SHOW_REVIEW');
-    }
-    await this.autoCompleteLocked(await this.load(s.id), 'booth_skip');
   }
 
   // ------------------------------------------------------------------ selection & edits
