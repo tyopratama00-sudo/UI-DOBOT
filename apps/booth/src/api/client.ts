@@ -131,6 +131,9 @@ class Api {
   payment(quantity: number, requestId = newRequestId()) {
     return this.req<SessionSnapshot>('POST', `/api/sessions/${this.sessionId}/payment`, { quantity }, { retries: 3, requestId, timeoutMs: 30000 });
   }
+  mockPay(orderId: string) {
+    return this.req<{ ok: boolean }>('POST', `/mock-pay/${encodeURIComponent(orderId)}`, { status: 'PAID' });
+  }
   command(cmd: SessionCommand, opts: { requestId?: string; timeoutMs?: number; retries?: number } = {}) {
     return this.req<SessionSnapshot>('POST', `/api/sessions/${this.sessionId}/commands`, cmd, {
       retries: opts.retries ?? 4,

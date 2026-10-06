@@ -178,6 +178,22 @@ class FloatingRobot {
     }, 780);
   }
 
+  flyRight(fn: () => void) {
+    const F = this.F;
+    if (!F.on || !this.rob) {
+      fn();
+      return;
+    }
+    F.busy = 1;
+    F.pause = 0;
+    F.dash = 1;
+    setTimeout(() => {
+      F.dash = 0;
+      F.busy = 0;
+      fn();
+    }, 780);
+  }
+
   // -------------------------------------------------------------- taps
 
   private onTap = (ev: PointerEvent) => {

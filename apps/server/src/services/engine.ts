@@ -410,6 +410,34 @@ export class SessionEngine {
         return null;
       }
 
+      case 'skip_angles': {
+        this.requireState(s, [
+          'READY', 'ROBOT_MOVING', 'POSE_GUIDANCE', 'COUNTDOWN', 'CAPTURING',
+          'CAPTURE_SUCCESS', 'ANGLE_COMPLETE', 'RETAKE',
+        ]);
+        const cur = await this.d.prisma.$transaction(async (tx) => {
+          const res = await tx.session.updateMany({
+            where: { id: s.id, version: s.version },
+            data: {
+              status: 'SESSION_COMPLETE',
+              retakeAngle: null,
+              captureAngle: null,
+              captureShot: null,
+              version: { increment: 1 },
+              lastActivityAt: new Date(),
+            },
+          });
+          if (res.count !== 1) throw appError('CONFLICT', 409, 'Session was modified concurrently', true);
+          await tx.sessionEvent.create({
+            data: { sessionId: s.id, event: 'SKIP_ANGLES', fromStatus: s.status, toStatus: 'SESSION_COMPLETE' },
+          });
+          return tx.session.findUniqueOrThrow({ where: { id: s.id } });
+        });
+        this.d.bus.emitSession(s.id);
+        await this.move(cur, 'SHOW_REVIEW');
+        return null;
+      }
+
       case 'retake': {
         this.requireState(s, ['REVIEW']);
         if (!canRetake(s.retakenAngles, cmd.angle, plan.retakeLimit, plan.angles))

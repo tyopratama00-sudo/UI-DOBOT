@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { priceFor, rp } from '@photobooth/shared';
 import { useBooth } from '../store';
 import { Bubble, Icon, QrCode, Robot } from '../components/basics';
+import { backFromPay, retryPayment, setQty, simulateMockPayment } from '../flow';
 import { puffs } from '../robot/floating';
-import { backFromPay, retryPayment, setQty } from '../flow';
+
+type PayPhase = 'wait' | 'transitioning' | 'ok';
 
 function useNow(ms = 1000) {
   const [now, setNow] = useState(Date.now());
@@ -23,9 +25,9 @@ export function Pay() {
   const payError = useBooth((s) => s.payError);
   const busy = useBooth((s) => s.busy);
   const now = useNow();
-  const pr = useRef<HTMLDivElement>(null);
-  const [appear, setAppear] = useState(true);
-
+  const [phase, setPhase] = useState<PayPhase>('wait');
+  const qrRef = useRef<HTMLDivElement>(null);
+  const asapRef = useRef<HTMLDivElement>(null);
   const st = session.status;
   const pay: 'wait' | 'ok' | 'fail' = st === 'PAYMENT_SUCCESS' ? 'ok' : st === 'PAYMENT_FAILED' || (payError && !payBusy) ? 'fail' : 'wait';
   const payment = session.payment && session.payment.status === 'PENDING' ? session.payment : null;
@@ -33,18 +35,18 @@ export function Pay() {
   const left = payment ? Math.max(0, Math.floor((new Date(payment.expiresAt).getTime() - now) / 1000)) : 0;
   const expired = session.payment?.status === 'EXPIRED';
 
-  // prototype ninjaIn(): the robot pops in with smoke puffs
   useEffect(() => {
-    puffs(pr.current, 170, 180, 6);
-    const a = setTimeout(() => puffs(pr.current, 170, 180, 4), 300);
-    const b = setTimeout(() => setAppear(false), 1300);
-    return () => {
-      clearTimeout(a);
-      clearTimeout(b);
-    };
-  }, []);
-
-  const failText = payError ?? (expired ? 'Waktu pembayaran habis. Yuk buat kode QR baru.' : 'Oops! Pembayaran belum berhasil. Yuk coba lagi.');
+    if (pay === 'ok' && phase === 'wait') {
+      setPhase('transitioning');
+      setTimeout(() => {
+        if (asapRef.current) {
+          puffs(asapRef.current, 620, 650, 9);
+          setTimeout(() => puffs(asapRef.current, 620, 650, 6), 350);
+        }
+      }, 50);
+      setTimeout(() => setPhase('ok'), 1200);
+    }
+  }, [pay, phase]);
 
   return (
     <div className="scr en">
@@ -57,13 +59,6 @@ export function Pay() {
       </div>
       <div className="row">
         <div className="card" style={{ flex: 1.15, padding: 56, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', position: 'relative' }}>
-          {pay === 'wait' ? (
-            <div id="pr" ref={pr} style={{ position: 'absolute', right: 36, top: 34, width: 170, height: 180 }}>
-              <div className={appear ? 'appear' : ''}>
-                <Robot m="hi" s={170} />
-              </div>
-            </div>
-          ) : null}
           <div>
             <h2>Pilih jumlah cetakanmu</h2>
             <p className="p" style={{ marginTop: 10, maxWidth: 640 }}>
@@ -88,8 +83,8 @@ export function Pay() {
             </div>
           </div>
         </div>
-        <div className="card" style={{ flex: 0.85, padding: 48, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', textAlign: 'center' }}>
-          {pay === 'wait' ? (
+        <div className="card" style={{ flex: 0.85, padding: 48, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', textAlign: 'center', position: 'relative' }}>
+          {phase === 'wait' && pay === 'wait' ? (
             <>
               <div className="pill w" data-testid="pay-waiting">
                 <Icon n="clock" z={34} /> Menunggu pembayaran
@@ -99,15 +94,34 @@ export function Pay() {
                   </span>
                 ) : null}
               </div>
-              <div className={`qrbox ${qrReady ? '' : 'busy'}`} style={{ padding: 18, border: '6px solid var(--soft)', borderRadius: 32, position: 'relative' }} data-testid="qris">
-                {payment ? <QrCode text={payment.qrString} size={360} level="Q" /> : <div className="qrskel" />}
+              <div ref={qrRef} className={`qrbox ${qrReady ? '' : 'busy'}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18, border: '6px solid var(--soft)', borderRadius: 32, position: 'relative' }} data-testid="qris">
+                <div>
+                  {payment ? <QrCode text={payment.qrString} size={360} level="Q" /> : <div className="qrskel" />}
+                </div>
                 <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%,-50%)', background: '#fff', borderRadius: 20, padding: '4px 12px', fontWeight: 700, fontSize: 30 }}>
                   QRIS
                 </div>
               </div>
-              <p className="p" style={{ fontSize: 32 }}>
-                Scan dengan e-wallet atau m-banking
-              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16, alignItems: 'center' }}>
+                <p className="p" style={{ fontSize: 32 }}>
+                  Scan dengan e-wallet atau m-banking
+                </p>
+                <button
+                  className={`btn ${busy === 'retry-pay' ? 'wait' : ''}`}
+                  style={{ height: 110, fontSize: 38, background: 'var(--lv)', color: 'var(--ink)', minWidth: 340 }}
+                  onClick={() => void simulateMockPayment()}
+                  data-testid="bayar-sekarang"
+                >
+                  BAYAR SEKARANG
+                </button>
+              </div>
+            </>
+          ) : phase === 'transitioning' ? (
+            <>
+              <div ref={asapRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 4 }} />
+              <div className="pill s" data-testid="pay-ok">
+                <Icon n="check" z={34} /> Pembayaran berhasil
+              </div>
             </>
           ) : pay === 'ok' ? (
             <>
@@ -128,7 +142,7 @@ export function Pay() {
                 <Icon n="x" z={34} /> Pembayaran gagal
               </div>
               <Robot m="think" s={260} />
-              <Bubble>{failText}</Bubble>
+              <Bubble>{payError ?? (expired ? 'Waktu pembayaran habis. Yuk buat kode QR baru.' : 'Oops! Pembayaran belum berhasil. Yuk coba lagi.')}</Bubble>
               <button className={`btn pr ${busy === 'retry-pay' ? 'wait' : ''}`} onClick={retryPayment} data-testid="pay-retry">
                 Coba lagi
               </button>

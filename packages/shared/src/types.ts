@@ -106,6 +106,7 @@ export interface BoothConfig {
   branding: Settings['branding'];
   timingScale: number;
   devTools: boolean;
+  mockPayment: boolean;
   environment: string;
 }
 
@@ -148,6 +149,7 @@ export const sessionCommandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('resume') }),
   z.object({ type: z.literal('next_shot') }),
   z.object({ type: z.literal('angle_done') }),
+  z.object({ type: z.literal('skip_angles') }),
   z.object({ type: z.literal('retake'), angle: z.number().int().min(0).max(19) }),
   z.object({ type: z.literal('select_angle'), angle: z.number().int().min(0).max(19), photoIds: z.array(z.string().max(40)).min(1).max(10) }),
   z.object({ type: z.literal('choose_frame') }),

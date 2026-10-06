@@ -2,6 +2,7 @@ import { nextMissingStep, p2, POSE_NAMES, tipFor } from '@photobooth/shared';
 import { useBooth } from '../store';
 import { Cam, } from '../components/Cam';
 import { Icon } from '../components/basics';
+import { skipSession } from '../flow';
 
 /** prototype V.ready */
 export function Ready() {
@@ -56,6 +57,7 @@ export function Session() {
       nice: [c.message, ''],
       retry: [c.message, ''],
     } as Record<string, [string, string]>)[c.phase] ?? ['', ''];
+  const totalPhotos = session.photos.length;
   return (
     <div className="scr en">
       <div className="top">
@@ -71,7 +73,7 @@ export function Session() {
           FOTO {p2(Math.max(c.shot, 1))} / {p2(shotsPerAngle)}
         </div>
       </div>
-      <Cam style={{ flex: 1 }}>
+      <Cam style={{ flex: 1, position: 'relative' }}>
         <div className={`cd ${c.phase === 'cd' && c.cd ? 'pop' : ''}`} key={`cd${c.cdKey ?? 0}`} id="cd">
           {c.phase === 'cd' && c.cd ? c.cd === 'cam' ? <Icon n="cam" z={240} c="#fff" /> : c.cd : null}
         </div>
@@ -83,6 +85,13 @@ export function Session() {
           </div>
         ) : null}
       </Cam>
+      {a < angles - 1 && totalPhotos >= 3 ? (
+        <div style={{ position: 'absolute', right: 32, bottom: 32, zIndex: 10 }}>
+          <button className="btn" style={{ height: 72, fontSize: 32, background: 'var(--mi)', color: 'var(--ink)', padding: '0 36px' }} onClick={skipSession}>
+            SELESAI
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

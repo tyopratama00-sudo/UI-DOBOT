@@ -29,6 +29,7 @@ export function boothConfig(ctx: AppContext): BoothConfig {
     branding: s.branding,
     timingScale: ctx.env.isProd ? 1 : s.dev.timingScale,
     devTools: !ctx.env.isProd && ctx.env.DEV_TOOLS !== false,
+    mockPayment: !!ctx.hardware.mockPayment,
     environment: ctx.env.NODE_ENV,
   };
 }

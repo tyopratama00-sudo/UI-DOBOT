@@ -191,9 +191,13 @@ function onEnterState(prevStatus: SessionState | null, next: SessionSnapshot, pa
         beginScheduled = true;
         const t = tok;
         setTimeout(() => {
+          if (t !== tok) {
+            beginScheduled = false;
+            return;
+          }
           beginScheduled = false;
           if (t === tok) void sendResilient({ type: 'begin' });
-        }, scaleMs(1400));
+        }, scaleMs(2800));
       }
       break;
     case 'READY':
@@ -358,6 +362,28 @@ export function retryPayment() {
   void guard('retry-pay', () => requestPayment(get().qty));
 }
 
+export async function simulateMockPayment() {
+  const s = get().session;
+  if (!get().config?.mockPayment || !s?.payment || s.payment.status !== 'PENDING' || get().payBusy) return;
+  const orderId = s.payment.qrString.split('/mock-pay/')[1];
+  if (!orderId) {
+    set({ payError: 'Kode pembayaran demo tidak valid.' });
+    return;
+  }
+  set({ payBusy: true, payError: null });
+  try {
+    await api.mockPay(decodeURIComponent(orderId));
+  } catch (e) {
+    set({ payError: (e as ApiError).userMessage ?? 'Pembayaran demo gagal. Coba lagi.' });
+  } finally {
+    set({ payBusy: false });
+  }
+}
+
+export function beginAfterPayment() {
+  robot.flyRight(() => void sendResilient({ type: 'begin' }));
+}
+
 export function backFromPay() {
   void guard('cancel', async () => {
     clearTimeout(payTimer);
@@ -498,6 +524,15 @@ export function tapReviewPhoto(angle: number, id: string) {
 
 export function retake(angle: number) {
   robot.rbNav(`Ulang sudut ${p2(angle + 1)}`, 'cam', () => void guard('retake', () => send({ type: 'retake', angle })));
+}
+
+export function skipSession() {
+  captureRunning = false;
+  tok++;
+  robot.rbNav('Selesai!', 'cheer', () => {
+    if (get().busy) return;
+    void send({ type: 'skip_angles' });
+  });
 }
 
 export function toFrames() {
