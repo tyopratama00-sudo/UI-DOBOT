@@ -21,6 +21,7 @@ export function Pay() {
   const session = useBooth((s) => s.session)!;
   const qty = useBooth((s) => s.qty);
   const pricing = useBooth((s) => s.config!.pricing);
+  const mockPayment = useBooth((s) => s.config!.mockPayment);
   const payBusy = useBooth((s) => s.payBusy);
   const payError = useBooth((s) => s.payError);
   const busy = useBooth((s) => s.busy);
@@ -106,14 +107,16 @@ export function Pay() {
                 <p className="p" style={{ fontSize: 32 }}>
                   Scan dengan e-wallet atau m-banking
                 </p>
-                <button
-                  className={`btn ${busy === 'retry-pay' ? 'wait' : ''}`}
-                  style={{ height: 110, fontSize: 38, background: 'var(--lv)', color: 'var(--ink)', minWidth: 340 }}
-                  onClick={() => void simulateMockPayment()}
-                  data-testid="bayar-sekarang"
-                >
-                  BAYAR SEKARANG
-                </button>
+                {mockPayment ? (
+                  <button
+                    className={`btn ${payBusy ? 'wait' : ''}`}
+                    style={{ height: 110, fontSize: 38, background: 'var(--lv)', color: 'var(--ink)', minWidth: 340 }}
+                    onClick={() => void simulateMockPayment()}
+                    data-testid="bayar-sekarang"
+                  >
+                    BAYAR SEKARANG
+                  </button>
+                ) : null}
               </div>
             </>
           ) : phase === 'transitioning' ? (

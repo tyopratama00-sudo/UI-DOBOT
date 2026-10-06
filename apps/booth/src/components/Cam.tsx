@@ -1,6 +1,66 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useBooth } from '../store';
 import { cameraInstance } from '../camera/service';
+import { deviceKey } from '../kiosk';
+
+/** Streams the server's multipart MJPEG live view into a canvas (reconnects on failure). */
+function useMjpegCanvas(url: string | null | undefined, ref: { current: HTMLCanvasElement | null }) {
+  useEffect(() => {
+    if (!url) return;
+    const ac = new AbortController();
+    const dec = new TextDecoder();
+    let drawing = false;
+    const draw = (jpeg: Uint8Array<ArrayBuffer>) => {
+      if (drawing) return; // drop frames while the previous one is still decoding
+      drawing = true;
+      createImageBitmap(new Blob([jpeg], { type: 'image/jpeg' }))
+        .then((bmp) => {
+          const c = ref.current;
+          if (c) {
+            if (c.width !== bmp.width || c.height !== bmp.height) Object.assign(c, { width: bmp.width, height: bmp.height });
+            c.getContext('2d')?.drawImage(bmp, 0, 0);
+          }
+          bmp.close();
+        })
+        .catch(() => undefined)
+        .finally(() => (drawing = false));
+    };
+    const headerEnd = (b: Uint8Array) => {
+      for (let i = 0; i + 3 < b.length; i++) if (b[i] === 13 && b[i + 1] === 10 && b[i + 2] === 13 && b[i + 3] === 10) return i;
+      return -1;
+    };
+    void (async () => {
+      while (!ac.signal.aborted) {
+        try {
+          const key = deviceKey();
+          const res = await fetch(url, { signal: ac.signal, cache: 'no-store', headers: key ? { 'x-booth-key': key } : {} });
+          const reader = res.body!.getReader();
+          let buf: Uint8Array<ArrayBuffer> = new Uint8Array(0);
+          for (;;) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            const next = new Uint8Array(buf.length + value.length);
+            next.set(buf);
+            next.set(value, buf.length);
+            buf = next;
+            for (;;) {
+              const h = headerEnd(buf);
+              if (h < 0) break;
+              const len = Number(/content-length:\s*(\d+)/i.exec(dec.decode(buf.subarray(0, h)))?.[1] ?? 0);
+              if (buf.length < h + 4 + len) break;
+              if (len) draw(buf.slice(h + 4, h + 4 + len));
+              buf = buf.subarray(h + 4 + len);
+            }
+          }
+        } catch {
+          /* reconnect below */
+        }
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+    })();
+    return () => ac.abort();
+  }, [url, ref]);
+}
 
 const delay = (w: number) => `-${((Date.now() / 1000) % w).toFixed(2)}s`;
 
@@ -16,7 +76,9 @@ const delay = (w: number) => `-${((Date.now() / 1000) % w).toFixed(2)}s`;
 export function Cam({ children, style }: { children?: ReactNode; style?: CSSProperties }) {
   const cfg = useBooth((s) => s.config?.camera);
   const camState = useBooth((s) => s.cameraState);
+  const shotUrl = useBooth((s) => s.capture.shotUrl);
   const boxRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
   const [delays] = useState(() => ({ d20: delay(20), d9: delay(9) }));
@@ -41,6 +103,8 @@ export function Cam({ children, style }: { children?: ReactNode; style?: CSSProp
     return () => cam?.attachVideo(null);
   }, [mode]);
 
+  useMjpegCanvas(mode === 'server' ? cfg?.liveViewUrl : null, canvasRef);
+
   const rot = cfg?.previewRotation ?? 0;
   const sideways = rot === 90 || rot === 270;
   const mediaStyle: CSSProperties = {
@@ -55,8 +119,11 @@ export function Cam({ children, style }: { children?: ReactNode; style?: CSSProp
         // Always mounted: the stream is re-attached transparently after a reconnect.
         <video ref={videoRef} className={`lv ${fit}`} style={{ ...mediaStyle, visibility: live ? 'visible' : 'hidden' }} autoPlay muted playsInline />
       ) : mode === 'server' && cfg?.liveViewUrl ? (
-        <img className={`lv ${fit}`} style={mediaStyle} src={cfg.liveViewUrl} alt="" draggable={false} />
+        // Canvas, not <img src=mjpeg>: Chrome leaves stale overlay pixels (countdown digits) on MJPEG images.
+        // While the DSLR shoots no frames arrive, so the last frame simply stays.
+        <canvas ref={canvasRef} className={`lv ${fit}`} style={mediaStyle} />
       ) : null}
+      {shotUrl ? <img className={`lv ${fit}`} src={shotUrl} alt="" draggable={false} /> : null}
       {(mode === 'browser' && !live) || mode === 'mock' || (mode === 'server' && !cfg?.liveViewUrl) ? (
         <>
           <div className="b1" style={{ animationDelay: delays.d20 }} />

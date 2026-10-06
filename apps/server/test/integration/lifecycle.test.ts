@@ -174,4 +174,18 @@ describe('session lifecycle (payment → capture → selection → render → pr
     expect(bad.statusCode).toBe(422);
     expect((await b.get()).status).toBe('POSE_GUIDANCE'); // capture failed → back to pose guidance
   });
+
+  it('skip_angles: refused without photos, jumps to review once some exist', async () => {
+    const b = new BoothClient(t.app);
+    await b.start();
+    await b.pay(t.ctx);
+    await b.ok({ type: 'begin' });
+    expect((await b.cmd({ type: 'skip_angles' })).status).toBe(400);
+    await b.ok({ type: 'move', angle: 0 });
+    await b.ok({ type: 'countdown', angle: 0, shot: 0 });
+    await b.ok({ type: 'capture', angle: 0, shot: 0 });
+    const s = await b.ok({ type: 'skip_angles' });
+    expect(s.status).toBe('REVIEW');
+    expect(s.photos.length).toBe(1);
+  });
 });

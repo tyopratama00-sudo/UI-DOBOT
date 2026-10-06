@@ -79,7 +79,7 @@ export function Session() {
         </div>
         <div className={`fl ${c.flashKey ? 'go' : ''}`} key={`fl${c.flashKey ?? 0}`} id="fl" />
         {m[0] ? (
-          <div className="stat tip" key={`${c.phase}${c.shot}${a}`} data-testid="session-stat">
+          <div className="stat tip" key={`stat-${c.phase}-${c.shot}-${a}`} data-testid="session-stat">
             {m[0]}
             {m[1] ? <small>{m[1]}</small> : null}
           </div>

@@ -191,12 +191,8 @@ function onEnterState(prevStatus: SessionState | null, next: SessionSnapshot, pa
         beginScheduled = true;
         const t = tok;
         setTimeout(() => {
-          if (t !== tok) {
-            beginScheduled = false;
-            return;
-          }
           beginScheduled = false;
-          if (t === tok) void sendResilient({ type: 'begin' });
+          if (t === tok) beginAfterPayment();
         }, scaleMs(2800));
       }
       break;
@@ -448,13 +444,13 @@ async function runCapture(t: number, retakeAngle: number | null) {
   }
 
   for (const [ai, a] of angles.entries()) {
-    setCapture({ angle: a, shot: 0, phase: 'move', message: '' });
+    setCapture({ angle: a, shot: 0, phase: 'move', message: '', cd: null, shotUrl: null });
     await Promise.all([sendResilient({ type: 'move', angle: a }, 90000), wait(1300, t)]);
     const start = ai === 0 ? firstShot : 0;
     for (let k = start; k < p.shotsPerAngle; k++) {
       let attempts = 0;
       for (;;) {
-        setCapture({ shot: k + 1, phase: 'prep', message: '' });
+        setCapture({ shot: k + 1, phase: 'prep', message: '', cd: null, shotUrl: null });
         await wait(2600, t);
         await sendResilient({ type: 'countdown', angle: a, shot: k });
         setCapture({ phase: 'cd' });
@@ -472,6 +468,12 @@ async function runCapture(t: number, retakeAngle: number | null) {
           setCapture({ phase: 'nice', message: k + 1 < p.shotsPerAngle ? 'Bagus banget!' : 'Mantap! Sudut ini selesai.' });
           const [snap] = await Promise.all([shooting, wait(800, t)]);
           applySnapshot(snap);
+          // Show the photo just taken before going back to the live view.
+          const taken = snap.photos.filter((x) => x.angle === a && x.shot === k).at(-1);
+          if (taken) {
+            setCapture({ shotUrl: taken.previewUrl });
+            await wait(1500, t);
+          }
           break;
         } catch (e) {
           if (isAbort(e)) throw e;
@@ -482,7 +484,7 @@ async function runCapture(t: number, retakeAngle: number | null) {
             await sendResilient({ type: 'capture_failed', angle: a, shot: k, reason: (e as Error).message.slice(0, 250) }).catch(() => undefined);
           } else await resync();
           if (get().session?.status === 'ERROR') return;
-          setCapture({ phase: 'retry', message: 'Foto gagal diambil. Kita coba lagi, ya.' });
+          setCapture({ phase: 'retry', message: 'Foto gagal diambil. Kita coba lagi, ya.', cd: null, shotUrl: null });
           robot.react('think', 'wob', 'Coba lagi, ya!', null, 1.6);
           await wait(1800, t);
           if (attempts > 6) throw e;

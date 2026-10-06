@@ -44,7 +44,7 @@ export interface BoothState {
   picks: string[];
   edits: Record<number, EditParams>;
   slot: number;
-  capture: { angle: number; shot: number; phase: CapturePhase; message: string; cd?: number | 'cam' | null; cdKey?: number; flashKey?: number };
+  capture: { angle: number; shot: number; phase: CapturePhase; message: string; cd?: number | 'cam' | null; cdKey?: number; flashKey?: number; shotUrl?: string | null };
   readyCd: number;
   big: string | null;
   busy: string | null;

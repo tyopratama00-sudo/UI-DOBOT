@@ -5,6 +5,7 @@ dist-electron/
 .env.local
 storage/*
 !storage/.gitkeep
+storage-e2e/
 logs/
 *.log
 coverage/

@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { promises as fs } from 'node:fs';
+import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
@@ -291,14 +292,43 @@ export class DigiCamControlDriver extends BaseDriver {
     super('digicamcontrol');
   }
 
-  private async get(query: string, timeoutMs = 8000): Promise<Response> {
-    const res = await fetch(`${this.baseUrl.replace(/\/+$/, '')}/${query}`, { signal: AbortSignal.timeout(timeoutMs) });
-    if (!res.ok) throw new CameraError('CAMERA_CAPTURE_FAILED', `digiCamControl HTTP ${res.status}`);
-    return res;
+  // digiCamControl's web server (Griffin.Networking) sends Content-Length twice and ignores
+  // "Connection: close"; both fetch and node:http refuse that, so speak raw HTTP/1.1 over a socket.
+  private get(query: string, timeoutMs = 8000): Promise<Buffer> {
+    const url = new URL(`${this.baseUrl.replace(/\/+$/, '')}/${query}`);
+    return new Promise((resolve, reject) => {
+      const sock = net.connect(Number(url.port) || 80, url.hostname);
+      let buf = Buffer.alloc(0);
+      const fail = (err: Error) => {
+        sock.destroy();
+        reject(err);
+      };
+      sock.setTimeout(timeoutMs, () => fail(new Error(`digiCamControl timeout after ${timeoutMs}ms`)));
+      sock.on('error', fail);
+      sock.on('connect', () => sock.write(`GET ${url.pathname}${url.search} HTTP/1.1\r\nHost: ${url.host}\r\nConnection: close\r\n\r\n`));
+      const done = () => {
+        const end = buf.indexOf('\r\n\r\n');
+        if (end < 0) return false;
+        const head = buf.subarray(0, end).toString('latin1');
+        const status = Number(head.match(/^HTTP\/1\.\d (\d{3})/)?.[1] ?? 0);
+        const len = head.match(/\r\ncontent-length:\s*(\d+)/i)?.[1];
+        const body = buf.subarray(end + 4);
+        if (len !== undefined && body.length < Number(len)) return false;
+        sock.destroy();
+        if (status < 200 || status >= 400) reject(new CameraError('CAMERA_CAPTURE_FAILED', `digiCamControl HTTP ${status}`));
+        else resolve(len !== undefined ? body.subarray(0, Number(len)) : body);
+        return true;
+      };
+      sock.on('data', (d: Buffer) => {
+        buf = Buffer.concat([buf, d]);
+        done();
+      });
+      sock.on('end', () => done() || fail(new Error('digiCamControl closed connection early')));
+    });
   }
 
   private async getText(param: string): Promise<string> {
-    return (await (await this.get(`?slc=get&param1=${encodeURIComponent(param)}&param2=`)).text()).trim();
+    return (await this.get(`?slc=get&param1=${encodeURIComponent(param)}&param2=`)).toString('utf8').trim();
   }
 
   async connect(): Promise<void> {
@@ -317,7 +347,7 @@ export class DigiCamControlDriver extends BaseDriver {
     await this.get('?CMD=LiveViewWnd_Show').catch(() => undefined);
     const tick = async () => {
       try {
-        const buf = Buffer.from(await (await this.get('liveview.jpg', 2000)).arrayBuffer());
+        const buf = await this.get('liveview.jpg', 2000);
         if (buf.length > 100) this.emitFrame(buf);
       } catch {
         /* skip frame */
@@ -337,29 +367,44 @@ export class DigiCamControlDriver extends BaseDriver {
   async capture(): Promise<CapturedPhoto<Buffer>> {
     this.checkFailure();
     this.set('capturing');
+    // digiCamControl ignores ?CMD=Capture while its live-view window is open: close it, shoot, reopen.
+    const hadPreview = !!this.timer;
+    if (this.timer) clearInterval(this.timer);
+    this.timer = null;
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
     try {
+      if (hadPreview) {
+        await this.get('?CMD=LiveViewWnd_Hide').catch(() => undefined);
+        await sleep(1000);
+      }
       const before = await this.getText('lastcaptured').catch(() => '');
       await this.get('?CMD=Capture', 15000);
+      // With RAW+JPEG the camera reports the .jpg and the RAW one after another; wait for the JPEG.
       const deadline = Date.now() + 20000;
-      let name = before;
-      while (Date.now() < deadline) {
-        await new Promise((r) => setTimeout(r, 300));
-        name = await this.getText('lastcaptured').catch(() => before);
-        if (name && name !== before && name !== '-') break;
+      let name = '';
+      while (Date.now() < deadline && !name) {
+        await sleep(300);
+        const n = await this.getText('lastcaptured').catch(() => before);
+        if (n && n !== before && /\.jpe?g$/i.test(n)) name = n;
       }
-      if (!name || name === before) throw new CameraError('CAMERA_TIMEOUT', 'digiCamControl did not report a new file');
-      let data: Buffer;
-      try {
-        const folder = await this.getText('session.folder');
-        data = await fs.readFile(path.isAbsolute(name) ? name : path.join(folder, name));
-      } catch {
-        data = Buffer.from(await (await this.get(`image/${encodeURIComponent(path.basename(name))}`, 15000)).arrayBuffer());
+      if (!name) throw new CameraError('CAMERA_TIMEOUT', 'digiCamControl did not report a new JPEG (is the camera set to JPEG or RAW+JPEG?)');
+      const folder = await this.getText('session.folder').catch(() => '');
+      const file = path.isAbsolute(name) ? name : path.join(folder, name);
+      let data: Buffer = Buffer.alloc(0);
+      // The file may still be being written when reported; wait for a complete JPEG (FFD8 … FFD9).
+      while (Date.now() < deadline + 10000) {
+        data = await fs.readFile(file).catch(() => this.get(`image/${encodeURIComponent(path.basename(name))}`, 15000).catch(() => Buffer.alloc(0)));
+        if (data.length > 4 && data[0] === 0xff && data[1] === 0xd8 && data[data.length - 2] === 0xff && data[data.length - 1] === 0xd9) break;
+        await sleep(200);
       }
-      this.set(this.timer ? 'previewing' : 'ready');
+      if (!data.length) throw new CameraError('CAMERA_CAPTURE_FAILED', `digiCamControl file unreadable: ${file}`);
+      this.set('ready');
       return { data, mimeType: 'image/jpeg', capturedAt: new Date(), source: 'digicamcontrol' };
     } catch (err) {
       this.set('error', { lastError: (err as Error).message });
       throw err instanceof CameraError ? err : new CameraError('CAMERA_CAPTURE_FAILED', (err as Error).message);
+    } finally {
+      if (hadPreview) await this.startPreview().catch(() => undefined);
     }
   }
 }

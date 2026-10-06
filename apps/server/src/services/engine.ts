@@ -415,6 +415,7 @@ export class SessionEngine {
           'READY', 'ROBOT_MOVING', 'POSE_GUIDANCE', 'COUNTDOWN', 'CAPTURING',
           'CAPTURE_SUCCESS', 'ANGLE_COMPLETE', 'RETAKE',
         ]);
+        if (!s.photos.length) throw appError('VALIDATION_ERROR', 400, 'Cannot finish a session without photos');
         const cur = await this.d.prisma.$transaction(async (tx) => {
           const res = await tx.session.updateMany({
             where: { id: s.id, version: s.version },
