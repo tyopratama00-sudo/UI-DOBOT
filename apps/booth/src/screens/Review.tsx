@@ -16,21 +16,23 @@ export function Review() {
     <div className="scr en" style={{ paddingTop: 40, paddingBottom: 36 }}>
       <div className="top" style={{ height: 90, marginBottom: 24 }}>
         <div>
-          <h2 style={{ fontSize: 52 }}>Lihat hasil fotomu</h2>
+          <h2 style={{ fontSize: 52 }}>Momen manismu ✨</h2>
           <div className="p" style={{ fontSize: 30, marginTop: 8 }}>
-            Ketuk foto untuk memperbesar. Sudut yang diulang: pilih {shotsPerAngle} dari {shotsPerAngle * 2}.
+            Ketuk foto untuk melihat lebih dekat · pilih {shotsPerAngle} foto terbaik per sudut.
           </div>
         </div>
-        <div className={`chip ${left ? 'y' : ''}`}>{left ? `${left} ULANG TERSISA` : 'ULANG HABIS'}</div>
+        <div className={`chip ${left ? 'y' : ''}`} data-testid="retakes-left">
+          {left ? `♡ ${left} kesempatan ulang` : '✓ Semua kesempatan dipakai'}
+        </div>
       </div>
       <div className="g5" style={{ flex: 1, gridTemplateColumns: `repeat(${cols},1fr)`, gridTemplateRows: `repeat(${rows},1fr)`, minHeight: 0 }}>
         {[...Array(angles)].map((_, a) => {
           const ps = session.photos.filter((p) => p.angle === a).sort((x, y) => x.shot - y.shot);
           const m = ps.length > shotsPerAngle;
           return (
-            <div key={a} className="card" style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 12, borderRadius: 30, minHeight: 0 }} data-testid={`review-angle-${a}`}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 30, fontWeight: 600 }}>
-                <span>Sudut {p2(a + 1)}</span>
+            <div key={a} className={`card review-card ${m ? 'review-picking' : ''}`} style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 12, borderRadius: 30, minHeight: 0 }} data-testid={`review-angle-${a}`}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 30, fontWeight: 600, gap: 8 }}>
+                <span>♡ Sudut {p2(a + 1)}</span>
                 {m ? (
                   <span style={{ color: 'var(--bl)', fontSize: 24 }}>
                     pilih {shotsPerAngle} dari {ps.length}
@@ -39,14 +41,15 @@ export function Review() {
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.max(2, shotsPerAngle)},1fr)`, gap: 10, flex: 1, alignContent: 'center' }}>
                 {ps.map((p) => (
-                  <div key={p.id} className={`th ${m && p.selected ? 'sel' : ''}`} style={{ aspectRatio: '4/3', borderWidth: 4 }} onClick={() => tapReviewPhoto(a, p.id)}>
+                  <div key={p.id} className={`th review-photo ${m && p.selected ? 'sel' : ''}`} style={{ aspectRatio: '4/3', borderWidth: 4 }} onClick={() => tapReviewPhoto(a, p.id)} aria-label={`Sudut ${a + 1}, foto ${p.shot}`}>
                     <Pic url={p.thumbUrl} />
+                    {m && p.selected ? <span className="review-selected">Pilihan</span> : null}
                   </div>
                 ))}
               </div>
               {session.retakenAngles.includes(a) || !left ? null : (
-                <button className="btn sm" style={{ height: 60, fontSize: 26 }} onClick={() => retake(a)} data-testid={`retake-${a}`}>
-                  <Icon n="rot" z={26} /> Ulang sudut
+                <button className="btn sm review-retake" style={{ height: 60, fontSize: 26 }} onClick={() => retake(a)} data-testid={`retake-${a}`}>
+                  <Icon n="rot" z={26} /> Coba sudut ini lagi
                 </button>
               )}
             </div>
@@ -55,7 +58,7 @@ export function Review() {
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 }}>
         <div className="p" style={{ fontSize: 28 }}>
-          {flatCount} foto terpilih · semua foto tetap tersimpan
+          ✨ {flatCount} foto dipilih · semua momen tetap tersimpan
         </div>
         <button className={`btn pr ${busy === 'frames' ? 'wait' : ''}`} onClick={toFrames} data-testid="review-next">
           LANJUT <Icon n="next" z={36} />

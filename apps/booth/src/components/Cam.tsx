@@ -1,64 +1,35 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useBooth } from '../store';
 import { cameraInstance } from '../camera/service';
-import { deviceKey } from '../kiosk';
 
-/** Streams the server's multipart MJPEG live view into a canvas (reconnects on failure). */
-function useMjpegCanvas(url: string | null | undefined, ref: { current: HTMLCanvasElement | null }) {
+/**
+ * Polls single JPEG frames (glambot GET /api/robot/liveview) into a canvas.
+ * Per-frame requests survive the camera being busy while shooting: a failed
+ * frame is skipped and the last good one stays on screen.
+ */
+function useJpegPollCanvas(url: string | null | undefined, ref: { current: HTMLCanvasElement | null }) {
   useEffect(() => {
     if (!url) return;
-    const ac = new AbortController();
-    const dec = new TextDecoder();
-    let drawing = false;
-    const draw = (jpeg: Uint8Array<ArrayBuffer>) => {
-      if (drawing) return; // drop frames while the previous one is still decoding
-      drawing = true;
-      createImageBitmap(new Blob([jpeg], { type: 'image/jpeg' }))
-        .then((bmp) => {
-          const c = ref.current;
-          if (c) {
-            if (c.width !== bmp.width || c.height !== bmp.height) Object.assign(c, { width: bmp.width, height: bmp.height });
-            c.getContext('2d')?.drawImage(bmp, 0, 0);
-          }
-          bmp.close();
-        })
-        .catch(() => undefined)
-        .finally(() => (drawing = false));
-    };
-    const headerEnd = (b: Uint8Array) => {
-      for (let i = 0; i + 3 < b.length; i++) if (b[i] === 13 && b[i + 1] === 10 && b[i + 2] === 13 && b[i + 3] === 10) return i;
-      return -1;
-    };
-    void (async () => {
-      while (!ac.signal.aborted) {
-        try {
-          const key = deviceKey();
-          const res = await fetch(url, { signal: ac.signal, cache: 'no-store', headers: key ? { 'x-booth-key': key } : {} });
-          const reader = res.body!.getReader();
-          let buf: Uint8Array<ArrayBuffer> = new Uint8Array(0);
-          for (;;) {
-            const { value, done } = await reader.read();
-            if (done) break;
-            const next = new Uint8Array(buf.length + value.length);
-            next.set(buf);
-            next.set(value, buf.length);
-            buf = next;
-            for (;;) {
-              const h = headerEnd(buf);
-              if (h < 0) break;
-              const len = Number(/content-length:\s*(\d+)/i.exec(dec.decode(buf.subarray(0, h)))?.[1] ?? 0);
-              if (buf.length < h + 4 + len) break;
-              if (len) draw(buf.slice(h + 4, h + 4 + len));
-              buf = buf.subarray(h + 4 + len);
-            }
-          }
-        } catch {
-          /* reconnect below */
+    let stop = false;
+    let n = 0;
+    const next = (ms: number) => !stop && setTimeout(load, ms);
+    const load = () => {
+      const img = new Image();
+      img.onload = () => {
+        const c = ref.current;
+        if (c) {
+          if (c.width !== img.naturalWidth || c.height !== img.naturalHeight) Object.assign(c, { width: img.naturalWidth, height: img.naturalHeight });
+          c.getContext('2d')?.drawImage(img, 0, 0);
         }
-        await new Promise((r) => setTimeout(r, 1000));
-      }
-    })();
-    return () => ac.abort();
+        next(80);
+      };
+      img.onerror = () => next(700);
+      img.src = `${url}${url.includes('?') ? '&' : '?'}t=${Date.now()}_${++n}`;
+    };
+    load();
+    return () => {
+      stop = true;
+    };
   }, [url, ref]);
 }
 
@@ -103,7 +74,7 @@ export function Cam({ children, style }: { children?: ReactNode; style?: CSSProp
     return () => cam?.attachVideo(null);
   }, [mode]);
 
-  useMjpegCanvas(mode === 'server' ? cfg?.liveViewUrl : null, canvasRef);
+  useJpegPollCanvas(mode === 'server' ? cfg?.liveViewUrl : null, canvasRef);
 
   const rot = cfg?.previewRotation ?? 0;
   const sideways = rot === 90 || rot === 270;

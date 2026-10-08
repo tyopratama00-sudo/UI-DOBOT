@@ -319,14 +319,23 @@ class FloatingRobot {
 export const robot = new FloatingRobot();
 
 /** prototype puffs(): ninja smoke puffs inside a box */
-export function puffs(box: HTMLElement | null, w: number, h: number, n: number) {
+export function puffs(
+  box: HTMLElement | null,
+  w: number,
+  h: number,
+  n: number,
+  /** size: [min,max] px · y: vertical center range (fraction of h) · drift: travel scale · spread: max delay s · life: ms before removal · cls: CSS class */
+  o: { size?: [number, number]; y?: [number, number]; drift?: number; spread?: number; life?: number; cls?: string } = {},
+) {
   if (!box) return;
+  const dr = o.drift ?? 1;
+  const [y0, y1] = o.y ?? [0.15, 0.85];
   for (let i = 0; i < n; i++) {
     const d = document.createElement('div');
-    const z = 130 + (Math.random() * 130 * w) / 300;
-    d.className = 'puff';
-    d.style.cssText = `width:${z}px;height:${z}px;left:${w * (0.1 + Math.random() * 0.8) - z / 2}px;top:${h * (0.15 + Math.random() * 0.7) - z / 2}px;--dx:${Math.random() * 140 - 70}px;--dy:${-30 - Math.random() * 110}px;animation-delay:${(Math.random() * 0.3).toFixed(2)}s`;
+    const z = o.size ? o.size[0] + Math.random() * (o.size[1] - o.size[0]) : 130 + (Math.random() * 130 * w) / 300;
+    d.className = o.cls ?? 'puff';
+    d.style.cssText = `width:${z}px;height:${z}px;left:${w * (0.1 + Math.random() * 0.8) - z / 2}px;top:${h * (y0 + Math.random() * (y1 - y0)) - z / 2}px;--dx:${(Math.random() * 140 - 70) * dr}px;--dy:${(-30 - Math.random() * 110) * dr}px;animation-delay:${(Math.random() * (o.spread ?? 0.3)).toFixed(2)}s`;
     box.appendChild(d);
-    setTimeout(() => d.remove(), 1900);
+    setTimeout(() => d.remove(), o.life ?? 1900);
   }
 }

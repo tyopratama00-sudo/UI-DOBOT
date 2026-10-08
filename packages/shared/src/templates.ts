@@ -32,6 +32,15 @@ export const photoTemplateSchema = z.object({
   enabled: z.boolean().default(true),
   /** Robot mascot reaction when the frame is tapped (prototype FRR). */
   reaction: reactionSchema.optional(),
+  /** Artwork frame (glambot admin): image drawn over the photos, slots in canvas pixels. */
+  overlay: z
+    .object({
+      image: z.string(),
+      width: z.number().positive(),
+      height: z.number().positive(),
+      slots: z.array(z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number(), shape: z.string() })),
+    })
+    .optional(),
 });
 export type PhotoTemplate = z.infer<typeof photoTemplateSchema>;
 

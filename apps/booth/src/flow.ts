@@ -361,14 +361,10 @@ export function retryPayment() {
 export async function simulateMockPayment() {
   const s = get().session;
   if (!get().config?.mockPayment || !s?.payment || s.payment.status !== 'PENDING' || get().payBusy) return;
-  const orderId = s.payment.qrString.split('/mock-pay/')[1];
-  if (!orderId) {
-    set({ payError: 'Kode pembayaran demo tidak valid.' });
-    return;
-  }
+  const orderId = s.payment.id;
   set({ payBusy: true, payError: null });
   try {
-    await api.mockPay(decodeURIComponent(orderId));
+    await api.mockPay(orderId);
   } catch (e) {
     set({ payError: (e as ApiError).userMessage ?? 'Pembayaran demo gagal. Coba lagi.' });
   } finally {
@@ -424,75 +420,97 @@ async function runSession(retakeAngle: number | null) {
   }
 }
 
-async function runCapture(t: number, retakeAngle: number | null) {
-  const sess = get().session!;
-  const p = sess.plan;
-  const cam = cameraInstance()!;
-  let angles: number[];
-  let firstShot = 0;
-  if (retakeAngle === null) {
-    const next = nextMissingStep(sess.photos, p.angles, p.shotsPerAngle);
-    if (!next) {
-      await sendResilient({ type: 'move', angle: p.angles - 1 }, 60000).catch(() => undefined);
+/**
+ * The dobot sequence runs on its own (enabled by `begin`): it moves through the
+ * presets and the Go backend auto-captures at each one. The booth only observes
+ * Flask /detection + Go /api/robot/config + the session photos and mirrors that
+ * into the capture screen, then hands over to REVIEW when the sequence ends.
+ */
+async function runCapture(t: number, _retakeAngle: number | null) {
+  await sendResilient({ type: 'move', angle: 0 }, 30000);
+  const started = Date.now();
+  let seenActive = false;
+  let count = get().session?.photos.length ?? 0;
+  let angle = Math.min(count, plan(get()).angles - 1);
+  let lastCd: number | null = null;
+  setCapture({ angle: Math.min(count, plan(get()).angles - 1), shot: 1, phase: 'move', message: '', cd: null, shotUrl: null });
+  /** Local countdown anchored to backend shutter deadline, not poll arrival. */
+  let shutterAt: number | null = null;
+  let armedKey: number | null = null;
+  let firedKey: number | null = null;
+  let captureStartedAt = 0;
+  const ticker = setInterval(() => {
+    if (shutterAt === null || t !== tok) return;
+    const left = shutterAt - Date.now();
+    if (lastCd === 1 && Date.now() - captureStartedAt >= 700) {
+      firedKey = armedKey;
+      shutterAt = null;
+      lastCd = null;
+      setCapture({ phase: 'shooting', cd: null });
       return;
     }
-    angles = [...Array(p.angles).keys()].filter((a) => a >= next.angle);
-    firstShot = next.shot;
-  } else {
-    angles = [retakeAngle];
-    firstShot = sess.photos.filter((x) => x.angle === retakeAngle && x.retaken).length;
-  }
-
-  for (const [ai, a] of angles.entries()) {
-    setCapture({ angle: a, shot: 0, phase: 'move', message: '', cd: null, shotUrl: null });
-    await Promise.all([sendResilient({ type: 'move', angle: a }, 90000), wait(1300, t)]);
-    const start = ai === 0 ? firstShot : 0;
-    for (let k = start; k < p.shotsPerAngle; k++) {
-      let attempts = 0;
-      for (;;) {
-        setCapture({ shot: k + 1, phase: 'prep', message: '', cd: null, shotUrl: null });
-        await wait(2600, t);
-        await sendResilient({ type: 'countdown', angle: a, shot: k });
-        setCapture({ phase: 'cd' });
-        for (let n = p.countdownSeconds; n >= 1; n--) {
-          cd(n);
-          await wait(650, t);
-        }
-        cd('cam');
-        flash();
-        const requestId = newRequestId();
-        const shooting = cam.shoot(a, k, requestId);
-        shooting.catch(() => undefined);
-        try {
-          await wait(500, t);
-          setCapture({ phase: 'nice', message: k + 1 < p.shotsPerAngle ? 'Bagus banget!' : 'Mantap! Sudut ini selesai.' });
-          const [snap] = await Promise.all([shooting, wait(800, t)]);
-          applySnapshot(snap);
-          // Show the photo just taken before going back to the live view.
-          const taken = snap.photos.filter((x) => x.angle === a && x.shot === k).at(-1);
-          if (taken) {
-            setCapture({ shotUrl: taken.previewUrl });
-            await wait(1500, t);
-          }
-          break;
-        } catch (e) {
-          if (isAbort(e)) throw e;
-          attempts++;
-          const status = get().session?.status;
-          // Browser capture failures never reached the server: report them.
-          if (status === 'COUNTDOWN' || status === 'CAPTURING') {
-            await sendResilient({ type: 'capture_failed', angle: a, shot: k, reason: (e as Error).message.slice(0, 250) }).catch(() => undefined);
-          } else await resync();
-          if (get().session?.status === 'ERROR') return;
-          setCapture({ phase: 'retry', message: 'Foto gagal diambil. Kita coba lagi, ya.', cd: null, shotUrl: null });
-          robot.react('think', 'wob', 'Coba lagi, ya!', null, 1.6);
-          await wait(1800, t);
-          if (attempts > 6) throw e;
-        }
-      }
-      if (k + 1 < p.shotsPerAngle) await sendResilient({ type: 'next_shot' });
-      else await sendResilient({ type: 'angle_done' });
+    if (left < 0) {
+      // Keep countdown ended only as a fallback if timer polling is late.
+      firedKey = armedKey;
+      shutterAt = null;
+      lastCd = null;
+      setCapture({ phase: 'shooting', cd: null });
+      return;
     }
+    const digit = left > 2000 ? 3 : left > 1000 ? 2 : 1;
+    if (digit !== lastCd) {
+      lastCd = digit;
+      if (digit === 1) captureStartedAt = Date.now();
+      setCapture({ phase: 'cd' });
+      cd(digit);
+    }
+  }, 50);
+  try {
+    for (;;) {
+      await wait(250, t);
+      const [det, rc, snap] = await Promise.all([api.robotDetection(), api.robotConfig(), api.refreshPhotos()]);
+      if (t !== tok) throw new Aborted();
+      if (snap) applySnapshot(snap);
+      const seq = det?.sequence;
+      if (seq?.total) api.setPlanAngles(seq.total);
+      const total = plan(get()).angles;
+      const n = get().session?.photos.length ?? 0;
+      const fsm = det?.fsm_state;
+      if (fsm === 'MOVING' || fsm === 'TRACKING' || fsm === 'CAPTURING' || rc?.auto_capture_active) seenActive = true;
+      angle = Math.max(0, Math.min(total - 1, seq?.index ? seq.index - 1 : n));
+
+      if (n > count) {
+        count = n;
+        flash();
+        firedKey = armedKey;
+        shutterAt = null;
+        lastCd = null;
+        setCapture({ angle, phase: 'nice', cd: null, message: n < total ? 'Bagus banget!' : 'Mantap! Semua sudut selesai.', shotUrl: get().session!.photos.at(-1)!.previewUrl });
+        await wait(1000, t);
+        setCapture({ shotUrl: null });
+        continue;
+      }
+
+      const done = (seenActive && (seq?.complete || fsm === 'DONE')) || (!det && n >= total) || Date.now() - started > api.captureLimitMs;
+      if (done) {
+        await sendResilient({ type: 'skip_angles' }, 30000);
+        return;
+      }
+
+      // 3-2-1 only from Go's timer. Go presses shutter as "1" appears; show 1
+      // briefly, then indicate capture processing until the photo arrives.
+      // Robot moves and the prep window show no digits. Deduplicate per pose.
+      const key = seq?.index ?? -(n + 1);
+      const leftMs = rc?.auto_capture_active ? rc.auto_capture_remaining_ms : 0;
+      if (key !== firedKey && leftMs > 0 && (shutterAt === null || key !== armedKey)) {
+        armedKey = key;
+        shutterAt = Date.now() + leftMs;
+        lastCd = null;
+      }
+      if (shutterAt === null) setCapture({ angle, phase: fsm === 'TRACKING' || fsm === 'CAPTURING' || rc?.auto_capture_active ? 'prep' : 'move', cd: null });
+    }
+  } finally {
+    clearInterval(ticker);
   }
 }
 

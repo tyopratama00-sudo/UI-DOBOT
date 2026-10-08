@@ -15,6 +15,8 @@ export interface Rect {
   y: number;
   w: number;
   h: number;
+  /** ellipse/circle slot (overlay frames) */
+  round?: boolean;
 }
 
 export interface FrameLayout {
@@ -35,9 +37,22 @@ export function frameWidthForHeight(t: Pick<PhotoTemplate, 'aspectRatio'>, heigh
 }
 
 export function computeFrameLayout(
-  t: Pick<PhotoTemplate, 'photoCount' | 'columns' | 'rows' | 'aspectRatio' | 'slotStyle'>,
+  t: Pick<PhotoTemplate, 'photoCount' | 'columns' | 'rows' | 'aspectRatio' | 'slotStyle'> & Partial<Pick<PhotoTemplate, 'overlay'>>,
   height: number,
 ): FrameLayout {
+  if (t.overlay) {
+    const k = height / t.overlay.height;
+    const width = t.overlay.width * k;
+    return {
+      width,
+      height,
+      padding: 0,
+      slots: t.overlay.slots.map((s) => ({ x: s.x * k, y: s.y * k, w: s.width * k, h: s.height * k, round: s.shape === 'ellipse' || s.shape === 'circle' })),
+      label: { x: 0, y: 0, w: 0, h: 0, fontSize: 0, letterSpacing: 0 },
+      slotRadius: 0,
+      ring: 0,
+    };
+  }
   const width = frameWidthForHeight(t, height);
   const cols = Math.max(1, t.columns);
   const rows = Math.max(1, t.rows || Math.ceil(t.photoCount / cols));

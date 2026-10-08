@@ -77,6 +77,129 @@ img {
     opacity: 0.55;
   }
 }
+
+/* Pay success: soft smoke clipped to the QR box, QR fades under it */
+.qrbox .asap {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 26px;
+  pointer-events: none;
+  z-index: 4;
+}
+.puff.soft {
+  animation: pfs 1.4s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  will-change: transform, opacity;
+}
+@keyframes pfs {
+  0% {
+    transform: translate(0, 0) scale(0.3);
+    opacity: 0;
+  }
+  30% {
+    opacity: 0.95;
+  }
+  100% {
+    transform: translate(var(--dx), var(--dy)) scale(1.25);
+    opacity: 0;
+  }
+}
+.qrin {
+  transition: opacity 0.7s ease 0.15s, transform 0.7s ease 0.15s;
+}
+.qrin.gone {
+  opacity: 0;
+  transform: scale(0.85);
+}
+/* thick smoke: opaque at once (hides the robot), thins out slowly */
+.puff.thick {
+  animation: pft 2s cubic-bezier(0.33, 0, 0.4, 1) both;
+  will-change: transform, opacity;
+}
+@keyframes pft {
+  0% {
+    transform: scale(0.7);
+    opacity: 0;
+  }
+  8% {
+    opacity: 0.97;
+  }
+  40% {
+    opacity: 0.95;
+  }
+  100% {
+    transform: translate(var(--dx), var(--dy)) scale(1.4);
+    opacity: 0;
+  }
+}
+/* robot under the smoke: un-blurs and reveals top→bottom (feet last) */
+.qrbox .emerge,
+.qrbox .fog {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 26px;
+  pointer-events: none;
+}
+.qrbox .emerge {
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-mask-image: linear-gradient(#000 50%, transparent);
+  mask-image: linear-gradient(#000 50%, transparent);
+  -webkit-mask-size: 100% 200%;
+  mask-size: 100% 200%;
+  animation: emerge 2.1s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+@keyframes emerge {
+  0% {
+    opacity: 0.2;
+    filter: blur(12px);
+    transform: translateY(14px) scale(0.92);
+    -webkit-mask-position: 0 100%;
+    mask-position: 0 100%;
+  }
+  35% {
+    opacity: 0.6;
+  }
+  100% {
+    opacity: 1;
+    filter: none;
+    transform: none;
+    -webkit-mask-position: 0 0;
+    mask-position: 0 0;
+  }
+}
+.qrbox .fog {
+  z-index: 3;
+  top: auto;
+  height: 45%;
+  border-radius: 0 0 26px 26px;
+  background: linear-gradient(to top, rgba(243, 238, 255, 0.95), rgba(243, 238, 255, 0));
+  animation: fog 2.4s ease both;
+}
+@keyframes fog {
+  0% {
+    opacity: 0;
+  }
+  12%,
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.late {
+  animation: fin 0.6s ease 1s both;
+}
+@keyframes fin {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
 .pill .tm {
   font-variant-numeric: tabular-nums;
   opacity: 0.75;
@@ -159,6 +282,53 @@ img {
 .th,
 .card[data-tap] {
   transition: transform 0.12s;
+}
+
+/* Review photos: softer cards, clear selection, and warm retake affordance. */
+.review-card {
+  background: linear-gradient(145deg, #fff 72%, #fff8fc);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.review-card:has(.review-photo:active) {
+  transform: scale(0.995);
+}
+.review-picking {
+  border-color: rgba(91, 124, 250, 0.3) !important;
+}
+.review-photo {
+  box-shadow: 0 8px 18px rgba(43, 42, 76, 0.12);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.review-photo:active {
+  transform: scale(0.97);
+}
+.review-photo.sel {
+  box-shadow: 0 0 0 4px rgba(91, 124, 250, 0.18), 0 10px 22px rgba(91, 124, 250, 0.24);
+}
+.review-selected {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  border-radius: 18px;
+  padding: 4px 12px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--bl);
+  font-size: 20px;
+  font-weight: 700;
+  box-shadow: 0 3px 10px rgba(43, 42, 76, 0.15);
+}
+.review-retake {
+  background: #fff0f6;
+  color: #9b4d75;
+  box-shadow: 0 4px 0 #f1c6da;
+}
+.retake-chip {
+  background: #ffe8f1;
+  color: #9b4d75;
+}
+.retake-stat {
+  border: 3px solid rgba(255, 199, 222, 0.9);
+  background: rgba(255, 248, 252, 0.94);
 }
 
 /* Development toolbar (only with ?dev in non-production builds) */

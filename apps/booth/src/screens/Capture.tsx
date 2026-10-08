@@ -54,15 +54,16 @@ export function Session() {
       move: [`Pindah ke Sudut ${p2(a + 1)}…`, 'Robot sedang mencari angle terbaik.'],
       prep: [POSE_NAMES[tip[3]] ?? tip[1], `${tip[1]} · ${tip[2]}`],
       cd: [POSE_NAMES[tip[3]] ?? tip[1], ''],
+      shooting: ['Sedang mengambil foto…', 'Tetap diam sebentar ya.'],
       nice: [c.message, ''],
       retry: [c.message, ''],
     } as Record<string, [string, string]>)[c.phase] ?? ['', ''];
   const totalPhotos = session.photos.length;
   return (
     <div className="scr en">
-      <div className="top">
-        <div className="chip b" data-testid="session-angle">
-          {retake ? 'ULANG · ' : ''}SUDUT {p2(a + 1)} / {p2(angles)}
+      <div className={`top ${retake ? 'retake-top' : ''}`}>
+        <div className={`chip ${retake ? 'retake-chip' : 'b'}`} data-testid="session-angle">
+          {retake ? '♡ COBA LAGI · ' : ''}SUDUT {p2(a + 1)} / {p2(angles)}
         </div>
         <div className="dots">
           {[...Array(angles)].map((_, i) => (
@@ -79,9 +80,9 @@ export function Session() {
         </div>
         <div className={`fl ${c.flashKey ? 'go' : ''}`} key={`fl${c.flashKey ?? 0}`} id="fl" />
         {m[0] ? (
-          <div className="stat tip" key={`stat-${c.phase}-${c.shot}-${a}`} data-testid="session-stat">
-            {m[0]}
-            {m[1] ? <small>{m[1]}</small> : null}
+          <div className={`stat tip ${retake ? 'retake-stat' : ''}`} key={`stat-${c.phase}-${c.shot}-${a}`} data-testid="session-stat">
+            {retake && c.phase === 'prep' ? 'Satu foto manis lagi ✨' : m[0]}
+            {retake && c.phase === 'move' ? <small>Robot bersiap untuk mengulang sudut ini.</small> : m[1] ? <small>{m[1]}</small> : null}
           </div>
         ) : null}
       </Cam>

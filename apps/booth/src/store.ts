@@ -13,7 +13,7 @@ import {
   type SessionSnapshot,
 } from '@photobooth/shared';
 
-export type CapturePhase = 'move' | 'prep' | 'cd' | 'nice' | 'retry' | '';
+export type CapturePhase = 'move' | 'prep' | 'cd' | 'shooting' | 'nice' | 'retry' | '';
 
 export interface HealthState {
   acceptingSessions: boolean;

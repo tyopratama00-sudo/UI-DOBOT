@@ -37,17 +37,26 @@ export function Pay() {
   const expired = session.payment?.status === 'EXPIRED';
 
   useEffect(() => {
-    if (pay === 'ok' && phase === 'wait') {
-      setPhase('transitioning');
-      setTimeout(() => {
-        if (asapRef.current) {
-          puffs(asapRef.current, 620, 650, 9);
-          setTimeout(() => puffs(asapRef.current, 620, 650, 6), 350);
-        }
-      }, 50);
-      setTimeout(() => setPhase('ok'), 1200);
-    }
+    if (pay === 'ok' && phase === 'wait') setPhase('transitioning');
   }, [pay, phase]);
+
+  // Robot emerges from smoke inside the QR box: thick puffs cover it at once and
+  // thin out, a second wave hugs the bottom so the feet clear last.
+  useEffect(() => {
+    if (phase !== 'transitioning') return;
+    const el = asapRef.current;
+    if (el) {
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      puffs(el, w, h, 11, { size: [w * 0.45, w * 0.7], drift: 0.25, spread: 0, life: 2300, cls: 'puff thick' });
+      puffs(el, w, h, 8, { size: [w * 0.35, w * 0.55], y: [0.6, 0.95], drift: 0.3, spread: 0.6, life: 2300, cls: 'puff soft' });
+    }
+    const t = setTimeout(() => setPhase('ok'), 2400);
+    return () => clearTimeout(t);
+  }, [phase]);
+  const done = phase !== 'wait';
+  // Keep the QR mounted on the paid render before the effect flips phase (no flicker).
+  const inQr = done || pay !== 'fail';
 
   return (
     <div className="scr en">
@@ -85,59 +94,64 @@ export function Pay() {
           </div>
         </div>
         <div className="card" style={{ flex: 0.85, padding: 48, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', textAlign: 'center', position: 'relative' }}>
-          {phase === 'wait' && pay === 'wait' ? (
+          {inQr ? (
             <>
-              <div className="pill w" data-testid="pay-waiting">
-                <Icon n="clock" z={34} /> Menunggu pembayaran
-                {qrReady && left > 0 ? (
-                  <span className="tm">
-                    · {String(Math.floor(left / 60)).padStart(2, '0')}:{String(left % 60).padStart(2, '0')}
-                  </span>
-                ) : null}
-              </div>
-              <div ref={qrRef} className={`qrbox ${qrReady ? '' : 'busy'}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18, border: '6px solid var(--soft)', borderRadius: 32, position: 'relative' }} data-testid="qris">
-                <div>
-                  {payment ? <QrCode text={payment.qrString} size={360} level="Q" /> : <div className="qrskel" />}
+              {done ? (
+                <div className="pill s" data-testid="pay-ok">
+                  <Icon n="check" z={34} /> Pembayaran berhasil
                 </div>
-                <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%,-50%)', background: '#fff', borderRadius: 20, padding: '4px 12px', fontWeight: 700, fontSize: 30 }}>
+              ) : (
+                <div className="pill w" data-testid="pay-waiting">
+                  <Icon n="clock" z={34} /> Menunggu pembayaran
+                  {qrReady && left > 0 ? (
+                    <span className="tm">
+                      · {String(Math.floor(left / 60)).padStart(2, '0')}:{String(left % 60).padStart(2, '0')}
+                    </span>
+                  ) : null}
+                </div>
+              )}
+              <div ref={qrRef} className={`qrbox ${qrReady || done ? '' : 'busy'}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18, border: '6px solid var(--soft)', borderRadius: 32, position: 'relative' }} data-testid="qris">
+                <div className={`qrin ${done ? 'gone' : ''}`}>
+                  {payment || done ? <QrCode text={payment?.qrString ?? session.payment?.qrString ?? ''} size={360} level="Q" /> : <div className="qrskel" />}
+                </div>
+                <div className={`qrin ${done ? 'gone' : ''}`} style={{ position: 'absolute', left: '50%', top: '50%', translate: '-50% -50%', background: '#fff', borderRadius: 20, padding: '4px 12px', fontWeight: 700, fontSize: 30 }}>
                   QRIS
                 </div>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16, alignItems: 'center' }}>
-                <p className="p" style={{ fontSize: 32 }}>
-                  Scan dengan e-wallet atau m-banking
-                </p>
-                {mockPayment ? (
-                  <button
-                    className={`btn ${payBusy ? 'wait' : ''}`}
-                    style={{ height: 110, fontSize: 38, background: 'var(--lv)', color: 'var(--ink)', minWidth: 340 }}
-                    onClick={() => void simulateMockPayment()}
-                    data-testid="bayar-sekarang"
-                  >
-                    BAYAR SEKARANG
-                  </button>
+                {/* layers: robot < fog < smoke, so the smoke covers the robot */}
+                {done ? (
+                  <>
+                    <div className="emerge">
+                      <Robot m="cheer" s={330} />
+                    </div>
+                    <div className="fog" />
+                    <div ref={asapRef} className="asap" />
+                  </>
                 ) : null}
               </div>
-            </>
-          ) : phase === 'transitioning' ? (
-            <>
-              <div ref={asapRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 4 }} />
-              <div className="pill s" data-testid="pay-ok">
-                <Icon n="check" z={34} /> Pembayaran berhasil
-              </div>
-            </>
-          ) : pay === 'ok' ? (
-            <>
-              <div className="pill s" data-testid="pay-ok">
-                <Icon n="check" z={34} /> Pembayaran berhasil
-              </div>
-              <Robot m="cheer" s={300} />
-              <div>
-                <h2>Lunas</h2>
-                <p className="p" style={{ marginTop: 8 }}>
-                  Kita mulai sebentar lagi.
-                </p>
-              </div>
+              {done ? (
+                <div className="late">
+                  <h2>Lunas</h2>
+                  <p className="p" style={{ marginTop: 8 }}>
+                    Kita mulai sebentar lagi.
+                  </p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16, alignItems: 'center' }}>
+                  <p className="p" style={{ fontSize: 32 }}>
+                    Scan dengan e-wallet atau m-banking
+                  </p>
+                  {mockPayment ? (
+                    <button
+                      className={`btn ${payBusy ? 'wait' : ''}`}
+                      style={{ height: 110, fontSize: 38, background: 'var(--lv)', color: 'var(--ink)', minWidth: 340 }}
+                      onClick={() => void simulateMockPayment()}
+                      data-testid="bayar-sekarang"
+                    >
+                      BAYAR SEKARANG
+                    </button>
+                  ) : null}
+                </div>
+              )}
             </>
           ) : (
             <>

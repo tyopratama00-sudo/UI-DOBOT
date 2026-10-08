@@ -52,7 +52,7 @@ export const Frame = memo(function Frame({ t, h, mode, slots, edits, activeSlot,
               top: r.y,
               width: r.w,
               height: r.h,
-              borderRadius: L.slotRadius,
+              borderRadius: r.round ? '50%' : L.slotRadius,
               boxShadow: L.ring ? `0 0 0 ${L.ring}px #fff,0 ${(8 * h) / 740}px ${(16 * h) / 740}px -${(8 * h) / 740}px rgba(43,42,76,.4)` : undefined,
             }}
             onPointerDown={live && onSlotPointerDown ? (ev) => onSlotPointerDown(ev, i) : undefined}
@@ -91,7 +91,11 @@ export const Frame = memo(function Frame({ t, h, mode, slots, edits, activeSlot,
           </div>
         );
       })}
+      {t.overlay ? (
+        <img src={t.overlay.image} alt="" draggable={false} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', borderRadius: 'inherit' }} />
+      ) : null}
       <div
+        hidden={!!t.overlay}
         style={{
           position: 'absolute',
           left: L.label.x,
